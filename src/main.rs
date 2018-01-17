@@ -62,7 +62,7 @@ fn main() {
 fn run(matches : clap::ArgMatches) -> Result<()> {
     let base = matches.value_of("BASE").unwrap();
     let timeout : u64 = matches.value_of("timeout").unwrap_or("10").parse().unwrap_or(10);
-    let n_thread : usize = matches.value_of("thread").unwrap_or("20").parse().unwrap_or(20);
+    let n_thread : usize = matches.value_of("thread").unwrap_or("4").parse().unwrap_or(4);
     let base = Url::parse(base)?;
     let pool = ThreadPool::new(n_thread);
     let mut url_done = HashSet::new();
@@ -125,7 +125,7 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
     if response.status().is_success() {
         let is_internal = url.host() == base.host();
         let is_html = match response.headers().get::<ContentType>() {
-            Some(content_type) => format!("{}", content_type ) == "text/html",
+            Some(content_type) => format!("{}", content_type ).contains("text/html"),
             None => false,
         };
         if is_internal && is_html {
@@ -137,14 +137,15 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
             response.read_to_string(&mut body)?;
             let body = body.as_bytes();
 
-            let elements = vec!( ("a","href"),("script","src"),("img","src") );
+            let elements = vec!( ("a","href"),("script","src"),("img","src"),("link","src") );
             for element in elements {
                 Document::from_read(body)?
                     .find(Name(element.0))
                     .filter_map(|n| n.attr(element.1))
                     .for_each(|x| {
-                        let url = make_full_url(&x, &base);
-                        let _ = tx.send(url);
+                        if let Some(url) = validate_and_make_full_url(&x, &base) {
+                            let _ = tx.send(url);
+                        }
                     });
             }
         }
@@ -154,11 +155,23 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
 }
 
 
-fn make_full_url(path_or_external : &str, base : &url::Url) -> url::Url {
+fn validate_and_make_full_url(path_or_external : &str, base : &url::Url) -> Option<url::Url> {
     let url = match Url::parse(path_or_external) {
-        Ok(url) => url,
-        Err(_e) => base.join(path_or_external).unwrap()
+        Ok(url) => Some(url),
+        _ => match base.join(path_or_external) {
+            Ok(url) => Some(url),
+            _ => None,
+        }
     };
 
-    url
+    match url {
+        Some(url) => {
+            if url.scheme()=="https" || url.scheme()=="http" {
+                Some(url)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
 }
