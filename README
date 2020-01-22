@@ -1,0 +1,13 @@
+Find broken links on a web site, following internal links containing the same base and checking first level external links.
+
+Example usage:
+
+```
+$ cargo run -- https://riccardo.casatta.it | grep KO
+    Finished dev [unoptimized + debuginfo] target(s) in 0.05s
+     Running `target/debug/brokenlinks 'https://riccardo.casatta.it'`
+KO https://it.linkedin.com/in/riccardocasatta error sending request for url (https://it.linkedin.com/in/riccardocasatta): invalid HTTP status-code parsed
+KO https://blockstream.com/ error sending request for url (https://blockstream.com/): invalid HTTP header parsed
+KO http://lastis.me/ error sending request for url (http://lastis.me/): error trying to connect: dns error: failed to lookup address information: Name or service not known
+
+```
