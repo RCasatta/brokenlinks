@@ -1,10 +1,3 @@
-#[macro_use]
-extern crate error_chain;
-extern crate clap;
-extern crate url;
-extern crate reqwest;
-extern crate select;
-extern crate threadpool;
 
 use std::sync::mpsc::{Sender,channel};
 use std::collections::HashSet;
@@ -15,16 +8,10 @@ use url::{Url, Position};
 use select::document::Document;
 use select::predicate::Name;
 use threadpool::ThreadPool;
-use reqwest::header::ContentType;
-use reqwest::Client;
+use reqwest::blocking::Client;
+use reqwest::header::CONTENT_TYPE;
+use std::error::Error;
 
-error_chain! {
-    foreign_links {
-        ParseError(url::ParseError);
-        ReqError(reqwest::Error);
-        IOError(std::io::Error);
-    }
-}
 
 fn main() {
     let matches  = App::new("BrokenLinks")
@@ -59,7 +46,7 @@ fn main() {
     }
 }
 
-fn run(matches : clap::ArgMatches) -> Result<()> {
+fn run(matches : clap::ArgMatches) -> Result<(), Box<dyn Error>> {
     let base = matches.value_of("BASE").unwrap();
     let timeout : u64 = matches.value_of("timeout").unwrap_or("10").parse().unwrap_or(10);
     let n_thread : usize = matches.value_of("thread").unwrap_or("4").parse().unwrap_or(4);
@@ -109,7 +96,7 @@ fn normalize(url : &url::Url) -> String {
     }
 }
 
-fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)  -> Result<()> {
+fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)  -> Result<(), Box<dyn Error>> {
 
     let client = Client::new();
     let mut is_head = true;
@@ -118,19 +105,19 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
         Ok(response) => response,
         Err(_) => { // sometimes HEAD is not supported by the server
             is_head=false;
-            reqwest::get(url.clone())?
+            client.get(url.clone()).send()?
         }
     };
 
     if response.status().is_success() {
         let is_internal = url.host() == base.host();
-        let is_html = match response.headers().get::<ContentType>() {
-            Some(content_type) => format!("{}", content_type ).contains("text/html"),
+        let is_html = match response.headers().get(CONTENT_TYPE) {
+            Some(content_type) => format!("{:?}", content_type ).contains("text/html"),
             None => false,
         };
         if is_internal && is_html {
             let mut response = match is_head {
-                true => reqwest::get(url.clone())?,
+                true => reqwest::blocking::get(url.clone())?,
                 false => response,  // no need to redo the get if already done
             };
             let mut body = String::new();

@@ -3,11 +3,11 @@ name = "brokenlinks"
 version = "0.1.1"
 authors = ["Riccardo Casatta <riccardo@casatta.it>"]
 description = "Find broken links in a site"
+edition = "2018"
 
 [dependencies]
-clap = "2.29.1"
-error-chain = "0.11.0"
-url = "1.6.0"
-reqwest = "0.8.2"
-select = "0.4.2"
+clap = "2.33.0"
+url = "2.1.1"
+reqwest = { version="0.10.1", features = ["blocking"]}
+select = "0.4.3"
 threadpool = "1.0"
