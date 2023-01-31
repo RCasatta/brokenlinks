@@ -135,6 +135,7 @@ fn get_url_and_extract(
                 Document::from_read(body)?
                     .find(Name(element.0))
                     .filter_map(|n| n.attr(element.1))
+                    .filter(|u| !u.contains('#'))
                     .for_each(|x| {
                         if let Some(url) = validate_and_make_full_url(&x, &base) {
                             let _ = tx.send(url);
