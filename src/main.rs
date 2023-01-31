@@ -9,7 +9,7 @@ use select::document::Document;
 use select::predicate::Name;
 use threadpool::ThreadPool;
 use reqwest::blocking::Client;
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{CONTENT_TYPE};
 use std::error::Error;
 
 /// Simple program to greet a person
@@ -68,7 +68,7 @@ fn run(args : Args) -> Result<(), Box<dyn Error>> {
             pool.execute(move|| {
 
                 match get_url_and_extract(&url, &cloned_base, cloned_tx) {
-                    Ok(_) => println!("OK {}", url),
+                    Ok(s) => println!("OK {} {}", url, s.map(|e| e.to_string()).unwrap_or_else(|| "".to_owned())),
                     Err(e) => println!("KO {} {}", url, e),
                 }
             });
@@ -88,7 +88,7 @@ fn normalize(url : &url::Url) -> String {
     }
 }
 
-fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)  -> Result<(), Box<dyn Error>> {
+fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)  -> Result<Option<usize>, Box<dyn Error>> {
 
     let client = Client::new();
     let mut is_head = true;
@@ -100,6 +100,7 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
             client.get(url.clone()).send()?
         }
     };
+    let mut html_size = None;
 
     if response.status().is_success() {
         let is_internal = url.host() == base.host();
@@ -115,6 +116,7 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
             let mut body = String::new();
             response.read_to_string(&mut body)?;
             let body = body.as_bytes();
+            html_size = Some(body.len());
 
             let elements = vec!( ("a","href"),("script","src"),("img","src"),("link","src") );
             for element in elements {
@@ -130,7 +132,7 @@ fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)
         }
     }
 
-    Ok(())
+    Ok(html_size)
 }
 
 
