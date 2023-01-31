@@ -54,7 +54,7 @@ fn run(args : Args) -> Result<(), Box<dyn Error>> {
     pool.execute(move|| {
         cloned_tx.send(cloned_base).expect("channel will be there waiting for the pool");
     });
-
+    let client = Client::new();
     loop {
         let url = match rx.recv_timeout(Duration::from_secs(timeout)) {
             Ok(url) => url,
@@ -65,9 +65,10 @@ fn run(args : Args) -> Result<(), Box<dyn Error>> {
             url_done.insert(url_normalized);
             let cloned_tx = tx.clone();
             let cloned_base = base.clone();
+            let client = client.clone();
             pool.execute(move|| {
 
-                match get_url_and_extract(&url, &cloned_base, cloned_tx) {
+                match get_url_and_extract(&url, &cloned_base, cloned_tx, client) {
                     Ok(s) => println!("OK {} {}", url, s.map(|e| e.to_string()).unwrap_or_else(|| "".to_owned())),
                     Err(e) => println!("KO {} {}", url, e),
                 }
@@ -88,9 +89,7 @@ fn normalize(url : &url::Url) -> String {
     }
 }
 
-fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>)  -> Result<Option<usize>, Box<dyn Error>> {
-
-    let client = Client::new();
+fn get_url_and_extract(url : &url::Url, base : &url::Url, tx : Sender<url::Url>, client: Client)  -> Result<Option<usize>, Box<dyn Error>> {
     let mut is_head = true;
 
     let response = match client.head(url.clone()).send() {
