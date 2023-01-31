@@ -3,7 +3,7 @@ use std::sync::mpsc::{Sender,channel};
 use std::collections::HashSet;
 use std::time::Duration;
 use std::io::Read;
-use clap::{Arg, App};
+use clap::{Parser, command};
 use url::{Url, Position};
 use select::document::Document;
 use select::predicate::Name;
@@ -12,44 +12,36 @@ use reqwest::blocking::Client;
 use reqwest::header::CONTENT_TYPE;
 use std::error::Error;
 
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+   /// Timeout for the request
+   #[arg(short, long, default_value_t = 10)]
+   timeout: u8,
+
+   /// Number of thread to use
+   #[arg(short, long, default_value_t = 4)]
+   thread: u8,
+
+   /// Base url
+   #[arg(short, long)]
+   base: String
+}
 
 fn main() {
-    let matches  = App::new("BrokenLinks")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .about(env!("CARGO_PKG_DESCRIPTION"))
-        .arg(
-            Arg::with_name("timeout")
-                .short("t")
-                .long("timeout")
-                .takes_value(true)
-                .help("Timeout value example (default: 10)")
-        )
-        .arg(
-            Arg::with_name("thread")
-                .short("T")
-                .long("thread")
-                .takes_value(true)
-                .help("Thread used (default: 20)")
-        )
-        .arg(
-            Arg::with_name("BASE")
-                .help("Sets the base domain (eg brokenlinks https://example.com)")
-                .required(true)
-                .index(1)
-        )
-        .get_matches();
+    let args  = Args::parse();
 
-    match run(matches) {
+    match run(args) {
         Ok(_) => println!("Finish"),
         Err(e) => println!("{:?}",e),
     }
 }
 
-fn run(matches : clap::ArgMatches) -> Result<(), Box<dyn Error>> {
-    let base = matches.value_of("BASE").unwrap();
-    let timeout : u64 = matches.value_of("timeout").unwrap_or("10").parse().unwrap_or(10);
-    let n_thread : usize = matches.value_of("thread").unwrap_or("4").parse().unwrap_or(4);
+fn run(args : Args) -> Result<(), Box<dyn Error>> {
+    let base =&args.base;
+    let timeout : u64 = args.timeout as u64;
+    let n_thread : usize = args.thread as usize;
     let base = Url::parse(base)?;
     let pool = ThreadPool::new(n_thread);
     let mut url_done = HashSet::new();
