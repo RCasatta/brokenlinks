@@ -15,13 +15,17 @@ use url::{Position, Url};
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Timeout for the request
+    /// Timeout to stop the loop when receiving no url
     #[arg(short, long, default_value_t = 10)]
     timeout: u8,
 
     /// Number of thread to use
     #[arg(short, long, default_value_t = 4)]
     thread: u8,
+
+    /// Max depth in the url path
+    #[arg(short, long, default_value_t = 255)]
+    max_depth: u8,
 
     /// Base url
     #[arg(short, long)]
@@ -43,6 +47,7 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
     let n_thread: usize = args.thread as usize;
     let base = Url::parse(base)?;
     let pool = ThreadPool::new(n_thread);
+    let max_depth = args.max_depth;
     let mut url_done = HashSet::new();
 
     let (tx, rx) = channel();
@@ -68,7 +73,7 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
             let cloned_base = base.clone();
             let client = client.clone();
             pool.execute(move || {
-                match get_url_and_extract(&url, &cloned_base, cloned_tx, client) {
+                match get_url_and_extract(&url, &cloned_base, cloned_tx, client, max_depth) {
                     Ok(s) => println!(
                         "OK {} {}",
                         url,
@@ -96,6 +101,7 @@ fn get_url_and_extract(
     base: &url::Url,
     tx: Sender<url::Url>,
     client: Client,
+    max_depth: u8,
 ) -> Result<Option<usize>, Box<dyn Error>> {
     let mut is_head = true;
 
@@ -135,9 +141,8 @@ fn get_url_and_extract(
                 Document::from_read(body)?
                     .find(Name(element.0))
                     .filter_map(|n| n.attr(element.1))
-                    .filter(|u| !u.contains('#'))
                     .for_each(|x| {
-                        if let Some(url) = validate_and_make_full_url(&x, &base) {
+                        if let Some(url) = validate_and_make_full_url(&x, &base, max_depth) {
                             let _ = tx.send(url);
                         }
                     });
@@ -148,23 +153,22 @@ fn get_url_and_extract(
     Ok(html_size)
 }
 
-fn validate_and_make_full_url(path_or_external: &str, base: &url::Url) -> Option<url::Url> {
-    let url = match Url::parse(path_or_external) {
-        Ok(url) => Some(url),
-        _ => match base.join(path_or_external) {
-            Ok(url) => Some(url),
-            _ => None,
-        },
-    };
+fn validate_and_make_full_url(
+    path_or_external: &str,
+    base: &url::Url,
+    max_depth: u8,
+) -> Option<url::Url> {
+    let mut url = base.join(path_or_external).ok()?;
+    url.set_fragment(None); // remove after #
 
-    match url {
-        Some(url) => {
-            if url.scheme() == "https" || url.scheme() == "http" {
-                Some(url)
-            } else {
-                None
+    if url.scheme() == "https" || url.scheme() == "http" {
+        if let Some(segments) = url.path_segments() {
+            if segments.count() > max_depth as usize {
+                return None;
             }
         }
-        _ => None,
+        Some(url)
+    } else {
+        None
     }
 }
