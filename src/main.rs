@@ -57,11 +57,11 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
 
     pool.execute(move || {
         cloned_tx
-            .send(cloned_base)
+            .send((cloned_base.clone(), cloned_base.clone()))
             .expect("channel will be there waiting for the pool");
     });
     let client = create_client();
-    while let Ok(url) = rx.recv_timeout(Duration::from_secs(timeout)) {
+    while let Ok((url, source)) = rx.recv_timeout(Duration::from_secs(timeout)) {
         let url_normalized = normalize(&url);
         if !url_done.contains(&url_normalized) {
             url_done.insert(url_normalized);
@@ -69,13 +69,21 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
             let cloned_base = base.clone();
             let client = client.clone();
             pool.execute(move || {
-                match get_url_and_extract(&url, &cloned_base, cloned_tx, client, max_depth) {
+                match get_url_and_extract(
+                    &url,
+                    &cloned_base,
+                    url.clone(),
+                    cloned_tx,
+                    client,
+                    max_depth,
+                ) {
                     Ok(s) => println!(
-                        "OK {} {}",
+                        "OK {} {} {}",
+                        source,
                         url,
                         s.map(|e| e.to_string()).unwrap_or_else(|| "".to_owned())
                     ),
-                    Err(e) => println!("KO {} {}", url, e),
+                    Err(e) => println!("KO {} {} {}", source, url, e),
                 }
             });
         }
@@ -104,7 +112,8 @@ fn normalize(url: &url::Url) -> String {
 fn get_url_and_extract(
     url: &url::Url,
     base: &url::Url,
-    tx: Sender<url::Url>,
+    source: url::Url,
+    tx: Sender<(url::Url, url::Url)>,
     client: Client,
     max_depth: u8,
 ) -> Result<Option<usize>, Box<dyn Error>> {
@@ -148,7 +157,7 @@ fn get_url_and_extract(
                     .filter_map(|n| n.attr(element.1))
                     .for_each(|x| {
                         if let Some(url) = validate_and_make_full_url(x, base, max_depth) {
-                            let _ = tx.send(url);
+                            let _ = tx.send((url, source.clone()));
                         }
                     });
             }
