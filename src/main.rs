@@ -1,4 +1,4 @@
-use clap::{command, Parser};
+use clap::{Parser};
 use reqwest::blocking::Client;
 use reqwest::header::CONTENT_TYPE;
 use select::document::Document;
