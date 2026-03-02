@@ -1,4 +1,4 @@
-use clap::{Parser};
+use clap::Parser;
 use reqwest::blocking::Client;
 use reqwest::header::CONTENT_TYPE;
 use select::document::Document;
@@ -60,12 +60,8 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
             .send(cloned_base)
             .expect("channel will be there waiting for the pool");
     });
-    let client = Client::new();
-    loop {
-        let url = match rx.recv_timeout(Duration::from_secs(timeout)) {
-            Ok(url) => url,
-            Err(_) => break,
-        };
+    let client = create_client();
+    while let Ok(url) = rx.recv_timeout(Duration::from_secs(timeout)) {
         let url_normalized = normalize(&url);
         if !url_done.contains(&url_normalized) {
             url_done.insert(url_normalized);
@@ -87,6 +83,15 @@ fn run(args: Args) -> Result<(), Box<dyn Error>> {
     eprintln!("{} urls", url_done.len());
 
     Ok(())
+}
+
+fn create_client() -> Client {
+    Client::builder()
+        .gzip(true)
+        .deflate(true)
+        .brotli(true)
+        .build()
+        .expect("Failed to build HTTP client")
 }
 
 fn normalize(url: &url::Url) -> String {
@@ -142,7 +147,7 @@ fn get_url_and_extract(
                     .find(Name(element.0))
                     .filter_map(|n| n.attr(element.1))
                     .for_each(|x| {
-                        if let Some(url) = validate_and_make_full_url(&x, &base, max_depth) {
+                        if let Some(url) = validate_and_make_full_url(x, base, max_depth) {
                             let _ = tx.send(url);
                         }
                     });
