@@ -2,12 +2,25 @@
   description = "brokenlinks development environment";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+  inputs.rust-overlay.url = "github:oxalica/rust-overlay";
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, rust-overlay }:
     let
       system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ rust-overlay.overlays.default ];
+      };
     in {
+      packages.${system}.default = pkgs.rustPlatform.buildRustPackage rec {
+        pname = "brokenlinks";
+        version = "0.1.1";
+        src = ./.;
+        cargoLock = { lockFile = ./Cargo.lock; };
+        nativeBuildInputs = with pkgs; [ rust-bin.stable.latest.default pkg-config ];
+        buildInputs = with pkgs; [ openssl ];
+      };
+
       devShells.${system}.default = pkgs.mkShell {
         buildInputs = with pkgs; [
           rustup
